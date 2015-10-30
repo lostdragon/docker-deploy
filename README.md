@@ -12,7 +12,7 @@
     `git clone git@git.coding.net:lostdragon/docker-deploy.git`
 
 - 进入deploy目录安装fabric依赖
-    `pip install -r requirement.txt`
+    `pip install -r requirements.txt`
 
 - 在deploy目录根据实际情况修改fabfile.py文件， 然后运行
     `fab prepare`

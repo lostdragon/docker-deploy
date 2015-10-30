@@ -27,7 +27,7 @@ env.roledefs = {
 domain_configs = {
     'default': {
         'domain': 'example.com',
-        'prefix': '',
+        'prefix': 'api.',
         'port': 80
     },
 }
@@ -51,7 +51,7 @@ docker_root = '/data/docker'
 projects = {
     PROJECT_NAME: {
         "local_path": PROJECT_ROOT,  # 本地地址
-        "alive": '-H "Host: {prefix}api.{domain}" {host}:{port}',  # 检查状态
+        "alive": '-H "Host: {prefix}{domain}" {host}:{port}',  # 检查状态
         "is_app": False,  # 是否app,默认false
         'roles': ['staging'],  # 部署角色
     },
@@ -64,7 +64,12 @@ app_dir={app_dir}
 cd $app_dir || exit
 unset GIT_DIR
 git pull origin master
-docker-compose -f {env}.yml up -d
+
+if [ "$(docker-compose -f {env}.yml ps)" != "" ] ; then
+    docker-compose -f {env}.yml restart
+else
+    docker-compose -f {env}.yml up -d
+fi
 '''
 
 

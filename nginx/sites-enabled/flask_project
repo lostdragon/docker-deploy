@@ -5,7 +5,7 @@ upstream api {
 server {
 
     listen 80;
-    server_name api.neighbour-link.com.cn;
+    server_name api.example.com;
     charset utf-8;
 
     location /static {

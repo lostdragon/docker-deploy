@@ -43,6 +43,7 @@ def _get_domain():
 data_root = '/data'
 git_root = '/data/gitroot'
 www_root = '/data/wwwroot'
+log_root = '/data/logs'
 app_root = '/data/approot'
 docker_root = '/data/docker'
 
@@ -206,7 +207,7 @@ def check_user():
 
 def check_data_dir():
     with settings(warn_only=True):
-        for d in [data_root, git_root, www_root]:
+        for d in [data_root, git_root, www_root, log_root]:
             if sudo("test -d {dir}".format(dir=d)).failed:
                 sudo("mkdir -p {dir}".format(dir=d))
                 sudo("chown -R git:git {dir}".format(dir=d))
@@ -398,3 +399,16 @@ def check_docker_compose():
         if result.failed:
             sudo('apt-get update -y && apt-get install -y python-pip')
             sudo('pip install docker-compose')
+
+
+def build(project=None):
+    with settings(sudo_user="git", warn_only=True):
+        with cd(www_root):
+            for p, items in projects.iteritems():
+                if _get_current_role() in items.get('roles', env.roledefs.keys()):
+                    if project is None or project == p:
+                        app_dir = get_app_dir(p, items)
+                        if app_dir:
+                            sudo(" cd {app_dir} && git pull origin master".format(app_dir=app_dir))
+                            role = _get_current_role()
+                            sudo('cd {app_dir} && docker-compose -f {env}.yml build'.format(app_dir=app_dir, env=role))

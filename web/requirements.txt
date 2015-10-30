@@ -1,10 +1,2 @@
 uwsgi
-gevent
-pillow
 flask
-flask-mail
-redis
-requests
-raven
-peewee>=2.6.4
-PyMySQL

@@ -1,0 +1,28 @@
+web:
+  restart: always
+  build: ./web
+  expose:
+    - "8000"
+  volumes:
+    - ./web:/usr/src/app
+  environment:
+    - APP_MODE=Staging
+    - MYSQL_PORT_3306_TCP_ADDR=linxiaoya.mysql.rds.aliyuncs.com
+    - MYSQL_PORT_3306_TCP_PORT=3306
+    - MYSQL_ENV_MYSQL_USER=linxiaoya
+    - MYSQL_ENV_MYSQL_PASSWORD=linxiaoya_passw0rd
+    - MYSQL_ENV_MYSQL_DATABASE=linxiaoya
+  command:
+    uwsgi -s 0.0.0.0:8000 --pidfile /tmp/app.pid --wsgi-file /usr/src/app/app.py --callable app --processes 4 --threads 2 --master --harakiri 300
+
+nginx:
+  restart: always
+  build: ./nginx/
+  ports:
+    - "80:80"
+  volumes:
+    - /www/static
+  volumes_from:
+    - web
+  links:
+    - web:web

@@ -1,0 +1,14 @@
+web:
+  build: ./dev
+  ports:
+    - "8000:8000"
+    - "2201:22"
+  external_links:
+    - docker_mysql_1:mysql
+  volumes:
+    - ./web:/usr/src/app
+  environment:
+    - APP_MODE=Development
+    - MYSQL_ENV_MYSQL_USER=linxiaoya
+    - MYSQL_ENV_MYSQL_PASSWORD=linxiaoya_passw0rd
+    - MYSQL_ENV_MYSQL_DATABASE=linxiaoya

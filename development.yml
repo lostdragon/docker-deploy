@@ -1,4 +1,8 @@
 web:
+  restart: always
+  build: ./web
+
+dev:
   build: ./dev
   ports:
     - "8000:8000"
@@ -7,4 +11,3 @@ web:
     - ./web:/usr/src/app
   environment:
     - APP_MODE=Development
-

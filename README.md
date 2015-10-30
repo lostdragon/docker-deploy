@@ -9,13 +9,16 @@
 ### 部署
 
 - 迁出代码到本地
-    `git clone xxx.git`
+    `git clone git@git.coding.net:lostdragon/docker-deploy.git`
 
 - 进入deploy目录安装fabric依赖
     `pip install -r requirement.txt`
 
-- 根据实际情况修改fabfile.py文件， 然后运行
+- 在deploy目录根据实际情况修改fabfile.py文件， 然后运行
     `fab prepare`
 
 - 之后要部署到staging只要执行
     `git push staging master`
+
+- 在deploy目录更新镜像
+    `fab build`

@@ -117,6 +117,11 @@ def deploy_and_check(project=None, is_reload=False, role=None):
 
 
 def install_docker():
+    """
+    安装docker
+    :return:
+    :rtype:
+    """
     with settings(sudo_user="root"):
         # ubuntu 14.04
         sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
@@ -184,6 +189,11 @@ def check_git():
 
 
 def check_user():
+    """
+    创建git用户用于发布
+    :return:
+    :rtype:
+    """
     with settings(warn_only=True):
         # check git user is exist
         result = run("id -u git")
@@ -402,6 +412,13 @@ def check_docker_compose():
 
 
 def build(project=None):
+    """
+    更新镜像
+    :param project:
+    :type project:
+    :return:
+    :rtype:
+    """
     with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():

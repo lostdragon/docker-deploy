@@ -64,7 +64,7 @@ app_dir={app_dir}
 cd $app_dir || exit
 unset GIT_DIR
 git checkout master -f
-
+git pull origin master
 if [ "$(docker-compose -f {env}.yml ps -q)" != "" ] ; then
     docker-compose -f {env}.yml restart
 else

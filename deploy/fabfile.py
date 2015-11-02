@@ -63,7 +63,7 @@ pull_template = '''#!/bin/sh
 app_dir={app_dir}
 cd $app_dir || exit
 unset GIT_DIR
-git pull origin master
+git checkout master -f
 
 if [ "$(docker-compose -f {env}.yml ps -q)" != "" ] ; then
     docker-compose -f {env}.yml restart
@@ -427,10 +427,31 @@ def build(project=None):
     with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
-                if _get_current_role() in items.get('roles', env.roledefs.keys()):
+                role = _get_current_role()
+                if role in items.get('roles', env.roledefs.keys()):
                     if project is None or project == p:
                         app_dir = get_app_dir(p, items)
                         if app_dir:
                             sudo(" cd {app_dir} && git pull origin master".format(app_dir=app_dir))
-                            role = _get_current_role()
                             sudo('cd {app_dir} && docker-compose -f {env}.yml build'.format(app_dir=app_dir, env=role))
+
+
+def rollback(project=None):
+    """
+    更新镜像
+    :param project:
+    :type project:
+    :return:
+    :rtype:
+    """
+    with settings(sudo_user="git", warn_only=True):
+        with cd(www_root):
+            for p, items in projects.iteritems():
+                role = _get_current_role()
+                if role in items.get('roles', env.roledefs.keys()):
+                    if project is None or project == p:
+                        app_dir = get_app_dir(p, items)
+                        if app_dir:
+                            sudo(" cd {app_dir} && git checkout HEAD~1 -f".format(app_dir=app_dir))
+                            sudo(
+                                'cd {app_dir} && docker-compose -f {env}.yml restart'.format(app_dir=app_dir, env=role))

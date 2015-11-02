@@ -1,8 +1,8 @@
 web:
-  restart: always
   build: ./web
 
 dev:
+  restart: always
   build: ./dev
   ports:
     - "8000:8000"

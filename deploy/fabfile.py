@@ -434,6 +434,10 @@ def build(project=None):
                         if app_dir:
                             sudo(" cd {app_dir} && git pull origin master".format(app_dir=app_dir))
                             sudo('cd {app_dir} && docker-compose -f {env}.yml build'.format(app_dir=app_dir, env=role))
+                            sudo(
+                                'cd {app_dir} && docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
+                                    app_dir=app_dir, env=role))
+        reload_service()
 
 
 def rollback(project=None):

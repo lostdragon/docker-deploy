@@ -17,6 +17,7 @@ nginx:
   ports:
     - "80:80"
   volumes:
+    - ./nginx/sites-enabled:/etc/nginx/sites-enabled
     - /data/logs/nginx:/var/log/nginx
     - /www/static
   volumes_from:

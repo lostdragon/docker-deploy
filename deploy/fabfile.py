@@ -4,10 +4,14 @@ from fabric.api import *
 from fabric.contrib.console import confirm
 import time
 import os
+import sys
 
 DEPLOY_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.dirname(DEPLOY_ROOT)
 PROJECT_NAME = os.path.basename(PROJECT_ROOT)
+
+# 取消默认-l参数
+env.shell = "/bin/bash -c"
 
 # 部署服务器ssh地址
 env.hosts = [
@@ -129,16 +133,16 @@ def install_docker():
     """
     with settings(sudo_user="root"):
         # ubuntu 14.04
+        result = sudo('dpkg -l | grep "linux-image-generic-lts-trusty"')
+        if result.failed:
+            print("install linux-image-generic-lts-trusty, after this need to reboot, then rerun script")
+            sudo('apt-get update -y && apt-get install -y linux-image-generic-lts-trusty')
+            sudo('reboot')
+            print "after reboot, need to rerun the script"
+            sys.exit()
+
         sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
         sudo('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > /etc/apt/sources.list.d/docker.list')
-
-        result = sudo('dpkg  -l | grep "linux-image-generic-lts-trusty"')
-
-        if result.failed:
-            print("install linux-image-generic-lts-trusty, then need reboot, after rerun script")
-            sudo('apt-get update -y && apt-get install linux-image-generic-lts-trusty')
-            sudo('reboot')
-
         sudo('apt-get update -y && apt-get install -y docker-engine')
         mount_docker()
 
@@ -170,7 +174,6 @@ def check_docker():
     check_user()
     # check is docker is installed
     with settings(sudo_user="git", warn_only=True):
-        sudo("whoami")
         result = sudo("which docker")
         if result.failed:
             print("docker not installed, try to install docker")
@@ -183,7 +186,7 @@ def check_docker():
             print("docker get version fail, add {who} user to docker group".format(who=who))
             with settings(sudo_user="root"):
                 # not permission
-                sudo("gpasswd -a {who} docker".format(who=who))
+                sudo("gpasswd -a git docker")
                 # docker daemon down
                 sudo("service docker restart")
     check_docker_compose()
@@ -204,7 +207,7 @@ def check_user():
         result = run("id -u git")
         if result.failed:
             # useradd git
-            sudo("adduser git && gpasswd -a git docker")
+            sudo("useradd -s /bin/bash -m git && gpasswd -a git docker")
 
         # check key is authorized
         key = local("cat ~/.ssh/id_rsa.pub", capture=True)
@@ -262,6 +265,7 @@ def _get_current_role():
     for role in env.roledefs.keys():
         if env.host_string in env.roledefs[role]:
             return role
+    print "host = {} not found in role define".format(env.host_string)
     return None
 
 
@@ -432,11 +436,12 @@ def build(project=None):
                     if project is None or project == p:
                         app_dir = get_app_dir(p, items)
                         if app_dir:
-                            sudo(" cd {app_dir} && git pull origin master".format(app_dir=app_dir))
-                            sudo('cd {app_dir} && docker-compose -f {env}.yml build'.format(app_dir=app_dir, env=role))
-                            sudo(
-                                'cd {app_dir} && docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
-                                    app_dir=app_dir, env=role))
+                            with cd(app_dir):
+                                sudo("git pull origin master")
+                                sudo('docker-compose -f {env}.yml build'.format(env=role))
+                                sudo(
+                                    'docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
+                                        env=role))
         reload_service()
 
 
@@ -456,6 +461,6 @@ def rollback(project=None):
                     if project is None or project == p:
                         app_dir = get_app_dir(p, items)
                         if app_dir:
-                            sudo(" cd {app_dir} && git checkout HEAD~1 -f".format(app_dir=app_dir))
-                            sudo(
-                                'cd {app_dir} && docker-compose -f {env}.yml restart'.format(app_dir=app_dir, env=role))
+                            with cd(app_dir):
+                                sudo("git checkout HEAD~1 -f")
+                                sudo('docker-compose -f {env}.yml restart'.format(env=role))

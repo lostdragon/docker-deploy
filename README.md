@@ -22,3 +22,6 @@
 
 - 在deploy目录更新镜像
     `fab build`
+    
+- 在deploy目录回滚到上次发布
+    `fab rollback`

@@ -70,7 +70,8 @@ unset GIT_DIR
 git checkout master -f
 git pull origin master
 if [ "$(docker-compose -f {env}.yml ps -q)" != "" ] ; then
-    docker-compose -f {env}.yml restart
+    docker-compose -f {env}.yml up -d
+    docker-compose -f {env}.yml kill -s HUP
 else
     docker-compose -f {env}.yml up -d
 fi
@@ -133,10 +134,10 @@ def install_docker():
     """
     with settings(sudo_user="root"):
         # ubuntu 14.04
-        result = sudo('dpkg -l | grep "linux-image-generic-lts-trusty"')
+        result = sudo('dpkg -l | grep "linux-image-generic-lts-vivid"')
         if result.failed:
-            print("install linux-image-generic-lts-trusty, after this need to reboot, then rerun script")
-            sudo('apt-get update -y && apt-get install -y linux-image-generic-lts-trusty')
+            print("install linux-image-generic-lts-vivid, after this need to reboot, then rerun script")
+            sudo('apt-get update -y && apt-get install -y linux-image-generic-lts-vivid')
             sudo('reboot')
             print "after reboot, need to rerun the script"
             sys.exit()

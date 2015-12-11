@@ -1,4 +1,4 @@
-FROM dockerdeploy_web:latest
+FROM dockerdeploy_base:latest
 
 RUN echo "deb http://mirrors.163.com/debian/ jessie main non-free contrib\n"\
 "deb http://mirrors.163.com/debian/ jessie-updates main non-free contrib\n"\

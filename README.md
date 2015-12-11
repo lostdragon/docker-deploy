@@ -15,7 +15,9 @@
     `pip install -r requirements.txt`
 
 - 在deploy目录根据实际情况修改fabfile.py文件， 然后运行
-    `fab prepare`
+    `fab prepare` 
+    如果需要指定角色可以加参数 
+    `fab prepare:roles=staging`
 
 - 之后要部署到staging只要执行
     `git push staging master`
@@ -25,3 +27,15 @@
     
 - 在deploy目录回滚到上次发布
     `fab rollback`
+    
+### 重启说明
+
+重启是发HUP信号给容器,容器会自动发给容器内第一个进程,如果容器内的进程不支持HUP信号或者运行多个进程则需要用supervisor管理: 
+
+- 目前用到几个支持HUP信号进程:
+  `uwsgi supervisor nginx` 
+  
+- redis忽略HUP信号
+
+### python项目依赖
+- 依赖放在项目home目录和代码一起提交,部署到服务器时不需要再更新镜像.

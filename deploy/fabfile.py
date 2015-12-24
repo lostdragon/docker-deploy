@@ -440,7 +440,7 @@ def start(project=""):
 # @task
 def check_alive():
     with settings(warn_only=True):
-        time.sleep(1)
+        time.sleep(2)
         for project, items in projects.iteritems():
             if items.get('is_app') is not True:
                 domain_config = _get_domain()

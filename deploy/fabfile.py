@@ -36,7 +36,12 @@ branches = {
 }
 
 domain_configs = {
-    'default': {
+    'testing': {
+        'domain': 'example.com',
+        'prefix': 'api.',
+        'port': 8080
+    },
+    'staging': {
         'domain': 'example.com',
         'prefix': 'api.',
         'port': 80

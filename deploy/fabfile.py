@@ -23,7 +23,7 @@ env.hosts = [
 #     'root@192.168.33.102:22': 'password',
 # }
 
-# 部署服务器角色定义，使用项目configs/目录中post-receive_{role}
+# 部署服务器角色定义
 env.roledefs = {
     'staging': [env.hosts[0]],
     'testing': [env.hosts[0]],
@@ -33,6 +33,11 @@ env.roledefs = {
 branches = {
     'staging': 'staging',
     'testing': 'testing',
+}
+
+# 部署服务器别名, 默认为角色名
+aliases = {
+    env.hosts[0]: '104',
 }
 
 domain_configs = {
@@ -293,12 +298,13 @@ def add_local_git():
                     role = _get_current_role()
                     remote_url = get_remote_url(env.host, project)
                     if role and role in items.get('roles', env.roledefs.keys()):
-                        if local('git remote -v | grep "{name}\t{remote_url}"'.format(name=role, remote_url=remote_url),
+                        name = aliases.get(env.host_string, role)
+                        if local('git remote -v | grep "{name}\t{remote_url}"'.format(name=name, remote_url=remote_url),
                                  capture=True).failed:
-                            if local('git remote -v | grep "{name}\t"'.format(name=role), capture=True).failed:
-                                local("git remote add {name} {remote_url}".format(name=role, remote_url=remote_url))
+                            if local('git remote -v | grep "{name}\t"'.format(name=name), capture=True).failed:
+                                local("git remote add {name} {remote_url}".format(name=name, remote_url=remote_url))
                             else:
-                                local("git remote set-url --add {name} {remote_url}".format(name=role,
+                                local("git remote set-url --add {name} {remote_url}".format(name=name,
                                                                                             remote_url=remote_url))
 
 

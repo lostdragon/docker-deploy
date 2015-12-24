@@ -64,25 +64,48 @@ projects = {
         "local_path": PROJECT_ROOT,  # 本地地址
         "alive": '-H "Host: {prefix}{domain}" {host}:{port}',  # 检查状态
         "is_app": False,  # 是否app,默认false
-        'roles': ['staging'],  # 部署角色
+        'roles': ['testing', 'staging'],  # 部署角色
     },
 }
 
 # ============ 以下不需要修改 ====================================
 
-pull_template = '''#!/bin/sh
-app_dir={app_dir}
-cd $app_dir || exit
-unset GIT_DIR
-git checkout {branch} -f
-git pull origin {branch}
-if [ "$(docker-compose -f {env}.yml ps -q)" != "" ] ; then
-    docker-compose -f {env}.yml up -d
-    docker-compose -f {env}.yml kill -s HUP
-else
-    docker-compose -f {env}.yml up -d
-fi
+run_template = '''
+    cd $app_dir || exit
+
+    unset GIT_DIR
+    git checkout $branch -f
+    git pull origin $branch
+    if [ "$(docker-compose -f $branch.yml ps -q)" != "" ] ; then
+        docker-compose -f $branch.yml up -d
+        docker-compose -f $branch.yml kill -s HUP
+    else
+        docker-compose -f $branch.yml up -d
+    fi
 '''
+
+pull_template = '''#!/bin/sh
+
+while read oldrev newrev refname
+do
+    branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+    if [ "master" == "$branch" ]; then
+        # Do something
+        app_dir={app_dir}
+    else
+        app_dir="{app_dir}_$branch"
+    fi
+
+    %s
+
+done
+''' % run_template
+
+first_run_template = '''#!/bin/sh
+app_dir={app_dir}
+branch={branch}
+%s
+''' % run_template
 
 
 # # @task
@@ -270,9 +293,14 @@ def add_local_git():
 
 
 def _get_current_role():
-    for role in env.roledefs.keys():
-        if env.host_string in env.roledefs[role]:
-            return role
+    if len(env.effective_roles) > 0:
+        return env.effective_roles[0]
+    else:
+        # 未定义角色默认取第一个
+        for role in env.roledefs.keys():
+            if env.host_string in env.roledefs[role]:
+                return role
+
     print "host = {} not found in role define".format(env.host_string)
     return None
 
@@ -310,15 +338,16 @@ def check_app_dir():
     update_post_receive()
 
 
-def get_app_dir(project, items):
+def get_app_dir(project, items, without_branch=False):
     if items.get('is_app') is True:
         app_dir = '{app_root}/{project}'.format(app_root=app_root, project=project)
     else:
         role = _get_current_role()
         if role in items.get('roles', env.roledefs.keys()):
-
-            branch = branches.get(role, '')
-
+            if without_branch:
+                branch = ''
+            else:
+                branch = branches.get(role, '')
             app_dir = '{www_root}/{project}{branch}'.format(www_root=www_root, project=project,
                                                             branch='_{}'.format(branch) if branch else '')
         else:
@@ -341,32 +370,26 @@ def update_post_receive(project=None):
                             git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=p)
 
                             post_receive = "{git_dir}/hooks/post-receive".format(git_dir=git_dir)
-                            if role:
-                                if sudo("test -f {app_dir}/configs/post-receive_{env}".format(app_dir=app_dir,
-                                                                                              env=role)).succeeded:
-                                    sudo(
-                                            "cp {app_dir}/configs/post-receive_{env} {post_receive}".format(
-                                                    app_dir=app_dir, env=role, post_receive=post_receive))
 
-                                elif sudo(
-                                        "test -f {app_dir}/post-receive_{env}".format(app_dir=app_dir,
-                                                                                      env=role)).succeeded:
-                                    sudo(
-                                            "cp {app_dir}/post-receive_{env} {post_receive}".format(
-                                                    app_dir=app_dir, env=role, post_receive=post_receive))
-                                else:
-                                    sudo("echo '{pull_template}' > {post_receive}".format(
-                                            pull_template=pull_template.format(app_dir=app_dir, env=role,
-                                                                               branch=branch),
-                                            post_receive=post_receive))
-                            else:
-
-                                sudo("echo '{pull_template}' > {post_receive}".format(
-                                        pull_template=pull_template.format(app_dir=app_dir, env=role,
-                                                                           branch=branch),
-                                        post_receive=post_receive))
+                            sudo("echo '{pull_template}' > {post_receive}".format(
+                                    pull_template=pull_template.format(app_dir=get_app_dir(p, items, True),
+                                                                       branch=branch),
+                                    post_receive=post_receive))
                             sudo("chmod +x {post_receive}".format(post_receive=post_receive))
-                            sudo(post_receive)
+
+                            first_run(app_dir, branch)
+
+
+def first_run(app_dir, branch):
+    tmp_file = '/tmp/first_run.sh'
+    sudo("echo '{run_template}' > {tmp_file}".format(
+            run_template=first_run_template.format(app_dir=app_dir,
+                                                   branch=branch),
+            tmp_file=tmp_file
+    ))
+    sudo("chmod +x {tmp_file}".format(tmp_file=tmp_file))
+    sudo(tmp_file)
+    sudo('rm {tmp_file}'.format(tmp_file=tmp_file))
 
 
 def get_remote_url(host, project):

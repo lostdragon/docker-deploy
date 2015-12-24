@@ -20,7 +20,7 @@ env.hosts = [
 
 # 部署服务器ssh密码,建议用公钥认证
 # env.passwords = {
-#     'root@192.168.33.102:22': 'password',
+#     'root@192.168.33.104:22': 'password',
 # }
 
 # 部署服务器角色定义

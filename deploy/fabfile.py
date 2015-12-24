@@ -15,7 +15,7 @@ env.shell = "/bin/bash -c"
 
 # 部署服务器ssh地址
 env.hosts = [
-    'root@192.168.33.102:22',
+    'root@192.168.33.104:22',
 ]
 
 # 部署服务器ssh密码,建议用公钥认证
@@ -25,7 +25,14 @@ env.hosts = [
 
 # 部署服务器角色定义，使用项目configs/目录中post-receive_{role}
 env.roledefs = {
-    'staging': ['root@192.168.33.102:22'],
+    'staging': [env.hosts[0]],
+    'testing': [env.hosts[0]],
+}
+
+# 部署角色对应git分支, 默认为master
+branches = {
+    'staging': 'staging',
+    'testing': 'testing',
 }
 
 domain_configs = {
@@ -67,8 +74,8 @@ pull_template = '''#!/bin/sh
 app_dir={app_dir}
 cd $app_dir || exit
 unset GIT_DIR
-git checkout master -f
-git pull origin master
+git checkout {branch} -f
+git pull origin {branch}
 if [ "$(docker-compose -f {env}.yml ps -q)" != "" ] ; then
     docker-compose -f {env}.yml up -d
     docker-compose -f {env}.yml kill -s HUP
@@ -280,19 +287,25 @@ def push(project=None, role=None):
                 local_path = items.get('local_path')
                 if local_path and role in items.get('roles', env.roledefs.keys()):
                     with lcd(local_path):
+                        branch = branches.get(role, 'master')
+
                         print "push {project} {name} to {host}".format(host=env.host, project=p, name=role)
-                        local("git push {name} master".format(name=role))
+                        local("git checkout {branch} && git push {name} {branch}".format(name=role, branch=branch))
 
 
 def check_app_dir():
     with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for project, items in projects.iteritems():
-                if _get_current_role() in items.get('roles', env.roledefs.keys()):
+                role = _get_current_role()
+                if role in items.get('roles', env.roledefs.keys()):
                     app_dir = get_app_dir(project, items)
+                    branch = branches.get(role, 'master')
                     git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=project)
                     if app_dir and sudo("test -d %s" % app_dir).failed:
-                        sudo("git clone {git_dir} {app_dir}".format(git_dir=git_dir, app_dir=app_dir))
+                        sudo("git clone --mirror {git_dir} {app_dir}/.git".format(git_dir=git_dir, app_dir=app_dir))
+                        with cd(app_dir):
+                            sudo("git config --bool core.bare false && git checkout {branch}".format(branch=branch))
 
     update_post_receive()
 
@@ -300,10 +313,16 @@ def check_app_dir():
 def get_app_dir(project, items):
     if items.get('is_app') is True:
         app_dir = '{app_root}/{project}'.format(app_root=app_root, project=project)
-    elif _get_current_role() in items.get('roles', env.roledefs.keys()):
-        app_dir = '{www_root}/{project}'.format(www_root=www_root, project=project)
     else:
-        app_dir = ''
+        role = _get_current_role()
+        if role in items.get('roles', env.roledefs.keys()):
+
+            branch = branches.get(role, '')
+
+            app_dir = '{www_root}/{project}{branch}'.format(www_root=www_root, project=project,
+                                                            branch='_{}'.format(branch) if branch else '')
+        else:
+            app_dir = ''
     return app_dir
 
 
@@ -312,36 +331,40 @@ def update_post_receive(project=None):
     with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
-                if _get_current_role() in items.get('roles', env.roledefs.keys()):
+                role = _get_current_role()
+                if role in items.get('roles', env.roledefs.keys()):
                     if project is None or project == p:
                         app_dir = get_app_dir(p, items)
+                        branch = branches.get(role, 'master')
                         if app_dir:
-                            sudo(" cd {app_dir} && git pull origin master".format(app_dir=app_dir))
+                            sudo(" cd {app_dir} && git pull origin {branch}".format(app_dir=app_dir, branch=branch))
                             git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=p)
 
-                            role = _get_current_role()
                             post_receive = "{git_dir}/hooks/post-receive".format(git_dir=git_dir)
                             if role:
                                 if sudo("test -f {app_dir}/configs/post-receive_{env}".format(app_dir=app_dir,
                                                                                               env=role)).succeeded:
                                     sudo(
-                                        "cp {app_dir}/configs/post-receive_{env} {post_receive}".format(
-                                            app_dir=app_dir, env=role, post_receive=post_receive))
+                                            "cp {app_dir}/configs/post-receive_{env} {post_receive}".format(
+                                                    app_dir=app_dir, env=role, post_receive=post_receive))
 
                                 elif sudo(
                                         "test -f {app_dir}/post-receive_{env}".format(app_dir=app_dir,
                                                                                       env=role)).succeeded:
                                     sudo(
-                                        "cp {app_dir}/post-receive_{env} {post_receive}".format(
-                                            app_dir=app_dir, env=role, post_receive=post_receive))
+                                            "cp {app_dir}/post-receive_{env} {post_receive}".format(
+                                                    app_dir=app_dir, env=role, post_receive=post_receive))
                                 else:
                                     sudo("echo '{pull_template}' > {post_receive}".format(
-                                        pull_template=pull_template.format(app_dir=app_dir, env=role),
-                                        post_receive=post_receive))
+                                            pull_template=pull_template.format(app_dir=app_dir, env=role,
+                                                                               branch=branch),
+                                            post_receive=post_receive))
                             else:
+
                                 sudo("echo '{pull_template}' > {post_receive}".format(
-                                    pull_template=pull_template.format(app_dir=app_dir, env=role),
-                                    post_receive=post_receive))
+                                        pull_template=pull_template.format(app_dir=app_dir, env=role,
+                                                                           branch=branch),
+                                        post_receive=post_receive))
                             sudo("chmod +x {post_receive}".format(post_receive=post_receive))
                             sudo(post_receive)
 
@@ -359,8 +382,8 @@ def test(project):
                 if unittest and local("test -d {local_path}/tests".format(local_path=local_path),
                                       capture=True).succeeded:
                     result = local(
-                        'python -m unittest discover {local_path}/tests'.format(local_path=local_path),
-                        capture=True)
+                            'python -m unittest discover {local_path}/tests'.format(local_path=local_path),
+                            capture=True)
                     if result.failed and not confirm("Tests failed. Continue anyway?"):
                         abort("Aborting at user request.")
 
@@ -396,8 +419,9 @@ def check_alive():
                             check_url = url.format(prefix=domain_config['prefix'], domain=domain_config['domain'],
                                                    port=domain_config['port'], host=env.host)
                             c = local(
-                                'curl -sL -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(check_url=check_url),
-                                capture=True)
+                                    'curl -sL -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
+                                            check_url=check_url),
+                                    capture=True)
                             if int(c.stdout) != status_code:
                                 print "curl {project} failed： status={status} ".format(project=project,
                                                                                        status=str(c.stdout))
@@ -406,8 +430,9 @@ def check_alive():
                                                               domain=domain_config['domain'],
                                                               port=domain_config['port'], host=env.host)
                         c = local(
-                            'curl -sL -f -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(check_url=check_url),
-                            capture=True)
+                                'curl -sL -f -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
+                                        check_url=check_url),
+                                capture=True)
                         if c.failed:
                             print "curl {project} failed： status={status} ".format(project=project,
                                                                                    status=str(c.stdout))
@@ -438,11 +463,12 @@ def build(project=None):
                         app_dir = get_app_dir(p, items)
                         if app_dir:
                             with cd(app_dir):
-                                sudo("git pull origin master")
+                                branch = branches.get(role, 'master')
+                                sudo("git pull origin {branch}".format(branch=branch))
                                 sudo('docker-compose -f {env}.yml build'.format(env=role))
                                 sudo(
-                                    'docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
-                                        env=role))
+                                        'docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
+                                                env=role))
         reload_service()
 
 
@@ -464,4 +490,5 @@ def rollback(project=None):
                         if app_dir:
                             with cd(app_dir):
                                 sudo("git checkout HEAD~1 -f")
-                                sudo('docker-compose -f {env}.yml restart'.format(env=role))
+                                sudo('docker-compose -f {env}.yml up -d'.format(env=role))
+                                sudo('docker-compose -f {env}.yml kill -s HUP'.format(env=role))

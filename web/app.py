@@ -7,7 +7,7 @@ app = create_app()
 
 @app.route('/')
 def index():
-    return 'ok'
+    return 'ok, i am master'
 
 
 if __name__ == '__main__':

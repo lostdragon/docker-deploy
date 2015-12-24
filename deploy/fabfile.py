@@ -91,13 +91,15 @@ run_template = '''
 
 pull_template = '''#!/bin/sh
 
-while read oldrev newrev refname
+while read oldrev newrev ref
 do
-    branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+    branch=`echo $ref | cut -d/ -f3`
+
     if [ "master" == "$branch" ]; then
-        # Do something
+        echo "master was pushed"
         app_dir={app_dir}
     else
+        echo "$branch was pushed"
         app_dir="{app_dir}_$branch"
     fi
 

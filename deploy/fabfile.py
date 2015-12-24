@@ -77,6 +77,7 @@ projects = {
 
 run_template = '''
     if [ -d "$app_dir" ]; then
+        cd $app_dir
         unset GIT_DIR
         git checkout $branch -f
         git pull origin $branch

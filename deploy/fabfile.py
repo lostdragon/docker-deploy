@@ -76,16 +76,18 @@ projects = {
 # ============ 以下不需要修改 ====================================
 
 run_template = '''
-    cd $app_dir || exit
-
-    unset GIT_DIR
-    git checkout $branch -f
-    git pull origin $branch
-    if [ "$(docker-compose -f $branch.yml ps -q)" != "" ] ; then
-        docker-compose -f $branch.yml up -d
-        docker-compose -f $branch.yml kill -s HUP
+    if [ -d "$app_dir" ]; then
+        unset GIT_DIR
+        git checkout $branch -f
+        git pull origin $branch
+        if [ "$(docker-compose -f $branch.yml ps -q)" != "" ] ; then
+            docker-compose -f $branch.yml up -d
+            docker-compose -f $branch.yml kill -s HUP
+        else
+            docker-compose -f $branch.yml up -d
+        fi
     else
-        docker-compose -f $branch.yml up -d
+        echo "app_dir not exist,nothing to do"
     fi
 '''
 
@@ -95,7 +97,7 @@ while read oldrev newrev ref
 do
     branch=`echo $ref | cut -d/ -f3`
 
-    if [ "master" == "$branch" ]; then
+    if [ "master" = "$branch" ]; then
         echo "master was pushed"
         app_dir={app_dir}
     else

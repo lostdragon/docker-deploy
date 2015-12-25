@@ -26,7 +26,7 @@ nginx:
   ports:
     - "8080:80"
   volumes:
-    - ./nginx/sites-enabled:/etc/nginx/conf.d
+    - ./nginx/conf.d:/etc/nginx/conf.d
     - /data/logs/nginx:/var/log/nginx
     - /www/static
   volumes_from:

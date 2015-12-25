@@ -5,6 +5,7 @@ from fabric.contrib.console import confirm
 import time
 import os
 import sys
+from fabric.colors import *
 
 DEPLOY_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.dirname(DEPLOY_ROOT)
@@ -25,21 +26,23 @@ env.hosts = [
 
 # 部署服务器角色定义
 env.roledefs = {
-    'staging': [env.hosts[0]],
+    'staging': [env.hosts[0]],  # 角色名 ssh地址
     'testing': [env.hosts[0]],
 }
 
 # 部署角色对应git分支, 默认为master
 branches = {
-    'staging': 'staging',
+    'staging': 'staging',  # 角色名 分支名
     'testing': 'testing',
+    'default': 'master',
 }
 
 # 部署服务器别名, 默认为角色名
 aliases = {
-    env.hosts[0]: 'vagrant',
+    env.hosts[0]: 'vagrant',  # ssh地址 别名
 }
 
+# 角色域名配置用于检测服务是否启动成功
 domain_configs = {
     'testing': {
         'domain': 'example.com',
@@ -53,20 +56,12 @@ domain_configs = {
     },
 }
 
-
-def _get_domain():
-    role = _get_current_role()
-    if role in domain_configs.keys():
-        return domain_configs[role]
-    return domain_configs['default']
-
-
-data_root = '/data'
-git_root = '/data/gitroot'
-www_root = '/data/wwwroot'
-log_root = '/data/logs'
-app_root = '/data/approot'
-docker_root = '/data/docker'
+data_root = '/data'  # 数据目录
+git_root = '/data/gitroot'  # git仓库根目录
+www_root = '/data/wwwroot'  # 网站根目录
+log_root = '/data/logs'  # 日志根目录
+app_root = '/data/approot'  # 应用根目录
+docker_root = '/data/docker'  # docker数据目录
 
 # 部署项目
 projects = {
@@ -133,6 +128,20 @@ first_run_template = '''#!/bin/sh
 ''' % run_template.format(run_service=start_container)
 
 
+def _get_domain():
+    role = _get_current_role()
+    if role in domain_configs.keys():
+        return domain_configs[role]
+    return domain_configs['default']
+
+
+def _get_branch(role):
+    if role in branches:
+        return branches.get(role)
+    else:
+        return branches.get('default')
+
+
 # # @task
 @parallel
 def prepare():
@@ -187,19 +196,29 @@ def install_docker():
     :return:
     :rtype:
     """
-    with settings(sudo_user="root"):
+    with settings(sudo_user="root", warn_only=True):
         # ubuntu 14.04
         result = sudo('dpkg -l | grep "linux-image-generic-lts-vivid"')
         if result.failed:
-            print("install linux-image-generic-lts-vivid, after this need to reboot, then rerun script")
-            sudo('apt-get update -y && apt-get install -y linux-image-generic-lts-vivid')
-            sudo('reboot')
-            print "after reboot, need to rerun the script"
+            print(blue("install linux-image-generic-lts-vivid, after this need to reboot, then rerun script"))
+
+            if not confirm("Confirm?"):
+                abort("Aborting at user request.")
+            else:
+                sudo('apt-get update -y && apt-get install -y linux-image-generic-lts-vivid')
+                sudo('reboot')
+
+            print(blue("after reboot, need to rerun the script"))
             sys.exit()
 
-        sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
-        sudo('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > /etc/apt/sources.list.d/docker.list')
-        sudo('apt-get update -y && apt-get install -y docker-engine')
+        result = sudo('dpkg -l | grep "docker-engine"')
+        if result.failed:
+            sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
+            sudo(
+                    ('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > '
+                     '/etc/apt/sources.list.d/docker.list'))
+            sudo('apt-get update -y && apt-get install -y docker-engine')
+
         mount_docker()
 
 
@@ -306,7 +325,7 @@ def add_local_git():
             if local_path:
                 with lcd(local_path):
                     role = _get_current_role()
-                    remote_url = get_remote_url(env.host, project)
+                    remote_url = _get_remote_url(env.host, project)
                     if role and role in items.get('roles', env.roledefs.keys()):
                         name = aliases.get(env.host_string, role)
                         if local('git remote -v | grep "{name}\t{remote_url}"'.format(name=name, remote_url=remote_url),
@@ -341,7 +360,7 @@ def push(project=None, role=None):
                 local_path = items.get('local_path')
                 if local_path and role in items.get('roles', env.roledefs.keys()):
                     with lcd(local_path):
-                        branch = branches.get(role, 'master')
+                        branch = _get_branch(role)
                         name = aliases.get(env.host_string, role)
                         print "push {project} {role} to {host}".format(host=env.host, project=p, role=role)
                         local("git push {name} {branch}".format(name=name, branch=branch))
@@ -354,7 +373,7 @@ def check_app_dir():
                 role = _get_current_role()
                 if role in items.get('roles', env.roledefs.keys()):
                     app_dir = get_app_dir(project, items)
-                    branch = branches.get(role, 'master')
+                    branch = _get_branch(role)
                     git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=project)
                     if app_dir and sudo("test -d %s" % app_dir).failed:
                         sudo("git clone --mirror {git_dir} {app_dir}/.git".format(git_dir=git_dir, app_dir=app_dir))
@@ -383,14 +402,14 @@ def get_app_dir(project, items, without_branch=False):
 
 # @task
 def update_post_receive(project=None):
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()
                 if role in items.get('roles', env.roledefs.keys()):
                     if project is None or project == p:
                         app_dir = get_app_dir(p, items)
-                        branch = branches.get(role, 'master')
+                        branch = _get_branch(role)
                         if app_dir:
                             sudo(" cd {app_dir} && git pull origin {branch}".format(app_dir=app_dir, branch=branch))
                             git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=p)
@@ -403,10 +422,10 @@ def update_post_receive(project=None):
                                     post_receive=post_receive))
                             sudo("chmod +x {post_receive}".format(post_receive=post_receive))
 
-                            first_run(app_dir, branch)
+                            _first_run(app_dir, branch)
 
 
-def first_run(app_dir, branch):
+def _first_run(app_dir, branch):
     tmp_file = '/tmp/first_run.sh'
     sudo("echo '{run_template}' > {tmp_file}".format(
             run_template=first_run_template.format(app_dir=app_dir,
@@ -418,7 +437,7 @@ def first_run(app_dir, branch):
     sudo('rm {tmp_file}'.format(tmp_file=tmp_file))
 
 
-def get_remote_url(host, project):
+def _get_remote_url(host, project):
     return 'git@{host}:{git_root}/{project}.git'.format(host=host, git_root=git_root, project=project)
 
 
@@ -447,12 +466,6 @@ def reload_service(project=None):
         update_post_receive(project)
 
 
-def start(project=""):
-    git_dir = '{git_root}/{project}.git'.format(git_root=git_root, project=project)
-    post_receive = "{git_dir}/hooks/post-receive".format(git_dir=git_dir)
-    run(post_receive)
-
-
 # @task
 def check_alive():
     with settings(warn_only=True):
@@ -472,8 +485,10 @@ def check_alive():
                                             check_url=check_url),
                                     capture=True)
                             if int(c.stdout) != status_code:
-                                print "curl {project} failed： status={status} ".format(project=project,
-                                                                                       status=str(c.stdout))
+                                print(red("curl {project} failed： status={status} ".format(project=project,
+                                                                                           status=str(c.stdout))))
+                            else:
+                                print(green("deploy success!"))
                     else:
                         check_url = items.get('alive').format(prefix=domain_config['prefix'],
                                                               domain=domain_config['domain'],
@@ -483,8 +498,10 @@ def check_alive():
                                         check_url=check_url),
                                 capture=True)
                         if c.failed:
-                            print "curl {project} failed： status={status} ".format(project=project,
-                                                                                   status=str(c.stdout))
+                            print(red("curl {project} failed： status={status} ".format(project=project,
+                                                                                       status=str(c.stdout))))
+                        else:
+                            print(green("deploy success!"))
 
 
 def check_docker_compose():
@@ -512,7 +529,7 @@ def build(project=None):
                         app_dir = get_app_dir(p, items)
                         if app_dir:
                             with cd(app_dir):
-                                branch = branches.get(role, 'master')
+                                branch = _get_branch(role)
                                 sudo("git pull origin {branch}".format(branch=branch))
                                 sudo('docker-compose -f {env}.yml build'.format(env=role))
                                 sudo(

@@ -11,20 +11,17 @@
 - 迁出代码到本地
     `git clone git@git.coding.net:lostdragon/docker-deploy.git`
 
-- 进入deploy目录安装fabric依赖
-    `pip install -r requirements.txt`
+- 本机安装fabric依赖
+     `pip install fabric`
 
 - 在deploy目录根据实际情况修改fabfile.py文件， 然后运行
-    `fab prepare` 
-    如果需要指定角色可以加参数 
+    `fab prepare`  # 如果一台服务器部署多个分支,默认只部署第一个分支
+    如果需要指定角色/分支可以加参数 
     `fab prepare:roles=staging`
 
-- 之后要部署到staging只要执行
-    `git push staging master`
+- 之后要部署到主机别名为vagrant的staging只要执行
+    `git push vagrant staging`
 
-- 在deploy目录更新镜像
-    `fab build`
-    
 - 在deploy目录回滚到上次发布
     `fab rollback`
     

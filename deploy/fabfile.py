@@ -37,7 +37,7 @@ branches = {
 
 # 部署服务器别名, 默认为角色名
 aliases = {
-    env.hosts[0]: '104',
+    env.hosts[0]: 'vagrant',
 }
 
 domain_configs = {
@@ -87,14 +87,24 @@ run_template = '''
         git checkout $branch -f
         git pull origin $branch
         if [ "$(docker-compose -f $branch.yml ps -q)" != "" ] ; then
-            docker-compose -f $branch.yml up -d
-            docker-compose -f $branch.yml kill -s HUP
+            {run_service}
         else
             docker-compose -f $branch.yml up -d
         fi
     else
         echo "app_dir not exist,nothing to do"
     fi
+'''
+
+start_container = '''
+            docker-compose -f $branch.yml stop
+            docker-compose -f $branch.yml rm -f
+            docker-compose -f $branch.yml up -d
+'''
+
+reload_container = '''
+            docker-compose -f $branch.yml up -d
+            docker-compose -f $branch.yml kill -s HUP
 '''
 
 pull_template = '''#!/bin/sh
@@ -114,13 +124,13 @@ do
     %s
 
 done
-''' % run_template
+''' % run_template.format(run_service=reload_container)
 
 first_run_template = '''#!/bin/sh
-app_dir={app_dir}
-branch={branch}
+    app_dir="{app_dir}"
+    branch="{branch}"
 %s
-''' % run_template
+''' % run_template.format(run_service=start_container)
 
 
 # # @task
@@ -332,9 +342,9 @@ def push(project=None, role=None):
                 if local_path and role in items.get('roles', env.roledefs.keys()):
                     with lcd(local_path):
                         branch = branches.get(role, 'master')
-
-                        print "push {project} {name} to {host}".format(host=env.host, project=p, name=role)
-                        local("git checkout {branch} && git push {name} {branch}".format(name=role, branch=branch))
+                        name = aliases.get(env.host_string, role)
+                        print "push {project} {role} to {host}".format(host=env.host, project=p, role=role)
+                        local("git push {name} {branch}".format(name=name, branch=branch))
 
 
 def check_app_dir():

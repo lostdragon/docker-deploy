@@ -143,7 +143,7 @@ def _get_branch(role):
 
 
 # # @task
-@parallel
+# @parallel
 def prepare():
     """
     开发环境准备： fab prepare:roles=staging
@@ -508,8 +508,8 @@ def check_docker_compose():
     with settings(warn_only=True):
         result = sudo('which docker-compose')
         if result.failed:
-            sudo('apt-get update -y && apt-get install -y python-pip')
-            sudo('pip install docker-compose')
+            sudo(
+                'curl -L https://get.daocloud.io/docker/compose/releases/download/1.6.2/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose')
 
 
 def build(project=None):

@@ -73,7 +73,7 @@ projects = {
     },
 }
 
-# ============ 以下不需要修改 ====================================
+# ============ 以下不需要修改 =============
 
 run_template = '''
     if [ -d "$app_dir" ]; then
@@ -215,8 +215,8 @@ def install_docker():
         if result.failed:
             sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
             sudo(
-                    ('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > '
-                     '/etc/apt/sources.list.d/docker.list'))
+                ('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > '
+                 '/etc/apt/sources.list.d/docker.list'))
             sudo('apt-get update -y && apt-get install -y docker-engine')
 
         mount_docker()
@@ -248,7 +248,7 @@ def _check(name):
 def check_docker():
     check_user()
     # check is docker is installed
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         result = sudo("which docker")
         if result.failed:
             print("docker not installed, try to install docker")
@@ -308,7 +308,7 @@ def check_data_dir():
 
 def check_app_git():
     check_git()
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         for project, items in projects.iteritems():
             if _get_current_role() in items.get('roles', env.roledefs.keys()):
                 app_git = project + ".git"
@@ -367,7 +367,7 @@ def push(project=None, role=None):
 
 
 def check_app_dir():
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         with cd(www_root):
             for project, items in projects.iteritems():
                 role = _get_current_role()
@@ -417,21 +417,21 @@ def update_post_receive(project=None):
                             post_receive = "{git_dir}/hooks/post-receive".format(git_dir=git_dir)
 
                             sudo("echo '{pull_template}' > {post_receive}".format(
-                                    pull_template=pull_template.format(app_dir=get_app_dir(p, items, True),
-                                                                       branch=branch),
-                                    post_receive=post_receive))
+                                pull_template=pull_template.format(app_dir=get_app_dir(p, items, True),
+                                                                   branch=branch),
+                                post_receive=post_receive))
                             sudo("chmod +x {post_receive}".format(post_receive=post_receive))
 
                             _first_run(app_dir, branch)
 
 
 def _first_run(app_dir, branch):
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         tmp_file = '/tmp/first_run.sh'
         sudo("echo '{run_template}' > {tmp_file}".format(
-                run_template=first_run_template.format(app_dir=app_dir,
-                                                       branch=branch),
-                tmp_file=tmp_file
+            run_template=first_run_template.format(app_dir=app_dir,
+                                                   branch=branch),
+            tmp_file=tmp_file
         ))
         sudo("chmod +x {tmp_file}".format(tmp_file=tmp_file))
         sudo(tmp_file)
@@ -451,8 +451,8 @@ def test(project):
                 if unittest and local("test -d {local_path}/tests".format(local_path=local_path),
                                       capture=True).succeeded:
                     result = local(
-                            'python -m unittest discover {local_path}/tests'.format(local_path=local_path),
-                            capture=True)
+                        'python -m unittest discover {local_path}/tests'.format(local_path=local_path),
+                        capture=True)
                     if result.failed and not confirm("Tests failed. Continue anyway?"):
                         abort("Aborting at user request.")
 
@@ -482,9 +482,9 @@ def check_alive():
                             check_url = url.format(prefix=domain_config['prefix'], domain=domain_config['domain'],
                                                    port=domain_config['port'], host=env.host)
                             c = local(
-                                    'curl -sL -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
-                                            check_url=check_url),
-                                    capture=True)
+                                'curl -sL -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
+                                    check_url=check_url),
+                                capture=True)
                             if int(c.stdout) != status_code:
                                 print(red("curl {project} failed： status={status} ".format(project=project,
                                                                                            status=str(c.stdout))))
@@ -495,9 +495,9 @@ def check_alive():
                                                               domain=domain_config['domain'],
                                                               port=domain_config['port'], host=env.host)
                         c = local(
-                                'curl -sL -f -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
-                                        check_url=check_url),
-                                capture=True)
+                            'curl -sL -f -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
+                                check_url=check_url),
+                            capture=True)
                         if c.failed:
                             print(red("curl {project} failed： status={status} ".format(project=project,
                                                                                        status=str(c.stdout))))
@@ -506,7 +506,7 @@ def check_alive():
 
 
 def check_docker_compose():
-    with settings(warn_only=True):
+    with settings(sudo_user="root", warn_only=True):
         result = sudo('which docker-compose')
         if result.failed:
             sudo(
@@ -521,7 +521,7 @@ def build(project=None):
     :return:
     :rtype:
     """
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()
@@ -534,8 +534,8 @@ def build(project=None):
                                 sudo("git pull origin {branch}".format(branch=branch))
                                 sudo('docker-compose -f {env}.yml build'.format(env=role))
                                 sudo(
-                                        'docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
-                                                env=role))
+                                    'docker-compose -f {env}.yml stop && docker-compose -f {env}.yml rm -f'.format(
+                                        env=role))
         reload_service()
 
 
@@ -547,7 +547,7 @@ def rollback(project=None):
     :return:
     :rtype:
     """
-    with settings(sudo_user="git", warn_only=True):
+    with settings(user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()

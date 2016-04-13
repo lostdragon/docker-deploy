@@ -426,15 +426,16 @@ def update_post_receive(project=None):
 
 
 def _first_run(app_dir, branch):
-    tmp_file = '/tmp/first_run.sh'
-    sudo("echo '{run_template}' > {tmp_file}".format(
-            run_template=first_run_template.format(app_dir=app_dir,
-                                                   branch=branch),
-            tmp_file=tmp_file
-    ))
-    sudo("chmod +x {tmp_file}".format(tmp_file=tmp_file))
-    sudo(tmp_file)
-    sudo('rm {tmp_file}'.format(tmp_file=tmp_file))
+    with settings(sudo_user="git", warn_only=True):
+        tmp_file = '/tmp/first_run.sh'
+        sudo("echo '{run_template}' > {tmp_file}".format(
+                run_template=first_run_template.format(app_dir=app_dir,
+                                                       branch=branch),
+                tmp_file=tmp_file
+        ))
+        sudo("chmod +x {tmp_file}".format(tmp_file=tmp_file))
+        sudo(tmp_file)
+        sudo('rm {tmp_file}'.format(tmp_file=tmp_file))
 
 
 def _get_remote_url(host, project):

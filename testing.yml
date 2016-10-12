@@ -4,7 +4,7 @@ base: &DEFAULT
     - ./web:/usr/src/app
     - ./home:/root/.local
   command:
-    "pip install --allow-external --no-cache-dir -i http://pypi.douban.com/simple/ --trusted-host=pypi.douban.com -r requirements.txt --user"
+    "pip install --no-cache-dir -i https://pypi.mirrors.ustc.edu.cn/simple/ -r requirements.txt --user"
 
 web:
   <<: *DEFAULT  # "inherit" from the configuration above
@@ -14,22 +14,20 @@ web:
   volumes:
     - ./web:/usr/src/app
     - ./home:/root/.local
+    - ./data/logs/supervisor:/logs
   environment:
     - APP_MODE=Testing
 
   command:
-    "/root/.local/bin/uwsgi -s 0.0.0.0:8000 --pidfile /tmp/app.pid --wsgi-file /usr/src/app/app.py --callable app --processes 4 --threads 2 --master --harakiri 300"
-
+    "/root/.local/bin/supervisord -c /usr/src/app/supervisor.conf"
+    
 nginx:
   restart: always
   build: ./nginx/
   ports:
-    - "8080:80"
+    - "8000:80"
   volumes:
     - ./nginx/conf.d:/etc/nginx/conf.d
-    - /data/logs/nginx:/var/log/nginx
-    - /www/static
-  volumes_from:
-    - web
+    - ./data/logs/nginx:/var/log/nginx
   links:
     - web:web

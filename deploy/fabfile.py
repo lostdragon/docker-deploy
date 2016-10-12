@@ -26,20 +26,20 @@ env.hosts = [
 
 # 部署服务器角色定义
 env.roledefs = {
-    'staging': [env.hosts[0]],  # 角色名 ssh地址
+    'staging': [env.hosts[0]],  # 角色名：ssh地址
     'testing': [env.hosts[0]],
 }
 
 # 部署角色对应git分支, 默认为master
 branches = {
-    'staging': 'staging',  # 角色名 分支名
+    'staging': 'staging',  # 角色名：分支名
     'testing': 'testing',
     'default': 'master',
 }
 
 # 部署服务器别名, 默认为角色名
 aliases = {
-    env.hosts[0]: 'vagrant',  # ssh地址 别名
+    env.hosts[0]: 'vagrant',  # git remote名
 }
 
 # 角色域名配置用于检测服务是否启动成功
@@ -47,12 +47,14 @@ domain_configs = {
     'testing': {
         'domain': 'example.com',
         'prefix': 'api.',
-        'port': 8080
+        'port': 8080,
+		'path': '',
     },
     'staging': {
         'domain': 'example.com',
         'prefix': 'api.',
-        'port': 80
+        'port': 80,
+		'path': '',
     },
 }
 
@@ -67,13 +69,13 @@ docker_root = '/data/docker'  # docker数据目录
 projects = {
     PROJECT_NAME: {
         "local_path": PROJECT_ROOT,  # 本地地址
-        "alive": '-H "Host: {prefix}{domain}" {host}:{port}',  # 检查状态
+        "alive": '-H "Host: {prefix}{domain}" {host}:{port}{path}',  # 检查状态
         "is_app": False,  # 是否app,默认false
         'roles': ['testing', 'staging'],  # 部署角色
     },
 }
 
-# ============ 以下不需要修改 =============
+# ============ 以下不需要修改 ====================================
 
 run_template = '''
     if [ -d "$app_dir" ]; then
@@ -81,6 +83,9 @@ run_template = '''
         unset GIT_DIR
         git checkout $branch -f
         git pull origin $branch
+
+        rm -rf $(find . -name "*.pyc")
+
         if [ "$(docker-compose -f $branch.yml ps -q)" != "" ] ; then
             {run_service}
         else
@@ -110,7 +115,7 @@ do
 
     if [ "master" = "$branch" ]; then
         echo "master was pushed"
-        app_dir={app_dir}
+        app_dir="{app_dir}"
     else
         echo "$branch was pushed"
         app_dir="{app_dir}_$branch"
@@ -155,6 +160,7 @@ def prepare():
     add_local_git()
     push()
     check_app_dir()
+    update_post_receive()
     check_alive()
 
 
@@ -213,13 +219,15 @@ def install_docker():
 
         result = sudo('dpkg -l | grep "docker-engine"')
         if result.failed:
-            sudo('apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
+            sudo('apt-get update -y && apt-get install -y apt-transport-https ca-certificates apparmor')
+            sudo(
+                'apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D')
             sudo(
                 ('echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" > '
                  '/etc/apt/sources.list.d/docker.list'))
             sudo('apt-get update -y && apt-get install -y docker-engine')
 
-        mount_docker()
+            # mount_docker()
 
 
 def mount_docker():
@@ -248,7 +256,7 @@ def _check(name):
 def check_docker():
     check_user()
     # check is docker is installed
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         result = sudo("which docker")
         if result.failed:
             print("docker not installed, try to install docker")
@@ -277,7 +285,7 @@ def check_user():
     :return:
     :rtype:
     """
-    with settings(warn_only=True):
+    with settings(sudo_user='root', warn_only=True):
         # check git user is exist
         result = run("id -u git")
         if result.failed:
@@ -308,7 +316,7 @@ def check_data_dir():
 
 def check_app_git():
     check_git()
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         for project, items in projects.iteritems():
             if _get_current_role() in items.get('roles', env.roledefs.keys()):
                 app_git = project + ".git"
@@ -367,7 +375,7 @@ def push(project=None, role=None):
 
 
 def check_app_dir():
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for project, items in projects.iteritems():
                 role = _get_current_role()
@@ -380,29 +388,31 @@ def check_app_dir():
                         with cd(app_dir):
                             sudo("git config --bool core.bare false && git checkout {branch}".format(branch=branch))
 
-    update_post_receive()
 
-
-def get_app_dir(project, items, without_branch=False):
+def get_app_dir(project, items):
     if items.get('is_app') is True:
         app_dir = '{app_root}/{project}'.format(app_root=app_root, project=project)
     else:
         role = _get_current_role()
         if role in items.get('roles', env.roledefs.keys()):
-            if without_branch:
-                branch = ''
-            else:
-                branch = branches.get(role, '')
-            app_dir = '{www_root}/{project}{branch}'.format(www_root=www_root, project=project,
-                                                            branch='_{}'.format(branch) if branch else '')
+            branch = branches.get(role, 'master')
+            return get_branch_app_dir(project, branch)
         else:
             app_dir = ''
     return app_dir
 
 
+def get_branch_app_dir(project, branch='master'):
+    if branch == 'master':
+        branch = ''
+    app_dir = '{www_root}/{project}{branch}'.format(www_root=www_root, project=project,
+                                                    branch='_{}'.format(branch) if branch else '')
+    return app_dir
+
+
 # @task
 def update_post_receive(project=None):
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()
@@ -417,8 +427,9 @@ def update_post_receive(project=None):
                             post_receive = "{git_dir}/hooks/post-receive".format(git_dir=git_dir)
 
                             sudo("echo '{pull_template}' > {post_receive}".format(
-                                pull_template=pull_template.format(app_dir=get_app_dir(p, items, True),
-                                                                   branch=branch),
+                                pull_template=pull_template.format(
+                                    app_dir=get_branch_app_dir(p),
+                                    branch=branch),
                                 post_receive=post_receive))
                             sudo("chmod +x {post_receive}".format(post_receive=post_receive))
 
@@ -426,7 +437,7 @@ def update_post_receive(project=None):
 
 
 def _first_run(app_dir, branch):
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         tmp_file = '/tmp/first_run.sh'
         sudo("echo '{run_template}' > {tmp_file}".format(
             run_template=first_run_template.format(app_dir=app_dir,
@@ -493,7 +504,8 @@ def check_alive():
                     else:
                         check_url = items.get('alive').format(prefix=domain_config['prefix'],
                                                               domain=domain_config['domain'],
-                                                              port=domain_config['port'], host=env.host)
+                                                              port=domain_config['port'], host=env.host,
+                                                              path=domain_config['path'])
                         c = local(
                             'curl -sL -f -w "%{http_code}"' + ' {check_url} -o /dev/null'.format(
                                 check_url=check_url),
@@ -509,6 +521,7 @@ def check_docker_compose():
     with settings(sudo_user="root", warn_only=True):
         result = sudo('which docker-compose')
         if result.failed:
+            sudo('apt-get update -y && apt-get install -y curl')
             sudo(
                 'curl -L https://get.daocloud.io/docker/compose/releases/download/1.6.2/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose')
 
@@ -521,7 +534,7 @@ def build(project=None):
     :return:
     :rtype:
     """
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()
@@ -541,13 +554,13 @@ def build(project=None):
 
 def rollback(project=None):
     """
-    更新镜像
+    回滚
     :param project:
     :type project:
     :return:
     :rtype:
     """
-    with settings(user="git", warn_only=True):
+    with settings(sudo_user="git", warn_only=True):
         with cd(www_root):
             for p, items in projects.iteritems():
                 role = _get_current_role()

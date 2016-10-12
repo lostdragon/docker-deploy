@@ -1,4 +1,10 @@
-FROM dockerdeploy_base:latest
+FROM index.alauda.cn/library/python:2.7
+
+ENV TZ Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
 
 RUN echo "deb http://mirrors.163.com/debian/ jessie main non-free contrib\n"\
 "deb http://mirrors.163.com/debian/ jessie-updates main non-free contrib\n"\

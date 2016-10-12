@@ -4,7 +4,7 @@ base:
     - ./web:/usr/src/app
     - ./home:/root/.local
   command:
-    "pip install --allow-external --no-cache-dir -i http://pypi.douban.com/simple/ --trusted-host=pypi.douban.com -r requirements.txt --user"
+    "pip install --no-cache-dir -i https://pypi.mirrors.ustc.edu.cn/simple/ -r requirements.txt --user"
 
 dev:
   restart: always
